@@ -1,4 +1,5 @@
 import org.scalatest._
+import exercises.optionsLib
 
 class OptionsSpec extends FlatSpec with Matchers {
   val someValue: Option[String] = Some("I am wrapped in something")
@@ -7,13 +8,9 @@ class OptionsSpec extends FlatSpec with Matchers {
   val emptyValue: Option[String] = None
   emptyValue should be(None)
 
-  def maybeItWillReturnSomething(flag: Boolean): Option[String] = {
-    if (flag) Some("Found value") else None
-  }
-
   // Using getOrElse we can provide a default value ("No value") when the optional argument (None) does not exist.
-  val value1 = maybeItWillReturnSomething(true)
-  val value2 = maybeItWillReturnSomething(false)
+  val value1 = optionsLib.maybeItWillReturnSomething(true)
+  val value2 = optionsLib.maybeItWillReturnSomething(false)
 
   value1 getOrElse "No value" should be("Found value")
   value2 getOrElse "No value" should be("No value")
