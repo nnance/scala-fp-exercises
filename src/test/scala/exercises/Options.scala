@@ -25,15 +25,15 @@ class OptionsSpec extends FlatSpec with Matchers {
   // pattern matching example
   val patternValue: Option[Double] = Some(20.0)
   val matchedVal = patternValue match {
-    case Some(v) ⇒ v
-    case None ⇒ 0.0
+    case Some(v) => v
+    case None => 0.0
   }
   matchedVal should be(20.0)
 
   val noValue: Option[Double] = None
   val matchedVal2 = noValue match {
-    case Some(v) ⇒ v
-    case None ⇒ 0.0
+    case Some(v) => v
+    case None => 0.0
   }
   matchedVal2 should be(0.0)
 
