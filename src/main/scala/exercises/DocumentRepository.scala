@@ -1,6 +1,7 @@
 package exercises
 
-import exercises.UserDomain.FindOne
+import exercises.UserDomain.UserRepository
+import exercises.FolderDomain.FolderRepository
 
 /**
   * Created by nicknance on 2/6/17.
@@ -12,11 +13,16 @@ object SecurityDomain {
 
 object UserDomain {
   type UserID = String
-  type UserRepository = List[User]
 
-  case class User(id: UserID, name: String, rights: SecurityDomain.AccessRights)
+  case class User(id: UserID,
+                  name: String,
+                  rights: SecurityDomain.AccessRights)
 
-  type FindOne = UserID => Option[User]
+  type FindUser = UserID => Option[User]
+
+  trait UserRepository {
+    def findOne: FindUser
+  }
 }
 
 object FolderDomain {
@@ -26,6 +32,10 @@ object FolderDomain {
   case class Folder(path: String, minRights: SecurityDomain.AccessRights)
 
   type FindOne = Location => Folder
+
+  trait FolderRepository {
+    def findOne: FindOne
+  }
 }
 
 case class FileStorage() {
@@ -43,14 +53,14 @@ trait DocumentStore {
   import FolderDomain._
 
   def storeDocument: (UserID, Location, FileStream) => Boolean
-}
 
-object DocumentStoreImpl {
-  import UserDomain._
-  import FolderDomain._
+  protected def storeDocumentWithDeps(findUser: FindUser,
+                                      findFolder: FolderDomain.FindOne,
+                                      fileStorage: FileStorage,
+                                      userID: UserID,
+                                      folderLocation: Location,
+                                      fileStream: FileStream): Boolean = {
 
-  def storeDocument(findUser: UserDomain.FindOne, findFolder: FolderDomain.FindOne, fileStorage: FileStorage,
-                    userID: UserID, folderLocation: Location, fileStream: FileStream): Boolean = {
     findUser(userID).exists(u => {
       val folder = findFolder(folderLocation)
       if (fileStorage.canWrite(u, folder)) {
@@ -62,49 +72,45 @@ object DocumentStoreImpl {
   }
 }
 
-object DocumentInjector {
-  def apply(findUser: UserDomain.FindOne, findFolder: FolderDomain.FindOne, storage: FileStorage): DocumentStore = {
-    object Store extends DocumentStore {
-      val storeDocument = DocumentStoreImpl.storeDocument(findUser, findFolder, storage, _, _ ,_)
-    }
-    Store
-  }
+case class DocumentInjector(userDB: UserRepository,
+                            folderRepository: FolderRepository,
+                            storage: FileStorage) extends DocumentStore {
+
+  def storeDocument = storeDocumentWithDeps(userDB.findOne, folderRepository.findOne, storage, _, _, _)
 }
 
-case class UserMemoryDB(users: List[UserDomain.User]) {
+case class UserMemoryRepository(users: List[UserDomain.User]) extends UserRepository {
   import UserDomain._
 
-  def findOne: FindOne = userId =>
+  def findOne: FindUser = userId =>
     users.find(u => u.id == userId)
 }
 
-case class FolderMemoryFS() {
+case class FolderMemoryFS() extends FolderRepository {
   import FolderDomain._
 
-  def findOne: FolderDomain.FindOne = loc =>
+  def findOne: FindOne = loc =>
     Folder(loc, 50)
 }
 
 object DocumentApp {
   import UserDomain._
-  import DocumentRepository._
 
   def main(args: Array[String]): Unit = {
 
     val users = List(User("1", "Test User", 100))
-    val findUser = UserMemoryDB(users).findOne
-    val findFolder = FolderMemoryFS().findOne
+    val userDB = UserMemoryRepository(users)
+    val folderRepo = FolderMemoryFS()
 
-    val store = DocumentInjector(findUser, findFolder, FileStorage())
+    userDB.findOne("1").foreach(_ => println("User found"))
+    userDB.findOne("2").foreach(_ => println("Error: User found"))
 
-    findUser("1").foreach(_ => println("User found"))
-    findUser("2").foreach(_ => println("Error: User found"))
-
-    val folder = findFolder("test")
+    val folder = folderRepo.findOne("test")
     println("Found folder " + folder.path)
-    findUser("1").foreach(u =>
+    userDB.findOne("1").foreach(u =>
       println("User 1 can write to folder " + FileStorage().canWrite(u, folder)))
 
+    val store = DocumentInjector(userDB, folderRepo, FileStorage())
     if (store.storeDocument("1", "test", "")) println("User able to store document")
   }
 }
