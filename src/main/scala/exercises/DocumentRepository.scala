@@ -38,7 +38,14 @@ case class FileStorage() {
   def save(fs: FileStream, u: User, f: Folder): Boolean = true
 }
 
-object DocumentRepository {
+trait DocumentStore {
+  import UserDomain._
+  import FolderDomain._
+
+  def storeDocument: (UserID, Location, FileStream) => Boolean
+}
+
+object DocumentStoreImpl {
   import UserDomain._
   import FolderDomain._
 
@@ -53,10 +60,15 @@ object DocumentRepository {
       }
     })
   }
+}
 
-  def storeDocumentWithDeps: (UserDomain.FindOne, FolderDomain.FindOne, FileStorage) =>
-    (UserID, Location, FileStream) => Boolean = (findUser, findFolder, fileStorage) =>
-    storeDocument(findUser, findFolder, fileStorage, _, _, _)
+object DocumentInjector {
+  def apply(findUser: UserDomain.FindOne, findFolder: FolderDomain.FindOne, storage: FileStorage): DocumentStore = {
+    object Store extends DocumentStore {
+      val storeDocument = DocumentStoreImpl.storeDocument(findUser, findFolder, storage, _, _ ,_)
+    }
+    Store
+  }
 }
 
 case class UserMemoryDB(users: List[UserDomain.User]) {
@@ -73,7 +85,7 @@ case class FolderMemoryFS() {
     Folder(loc, 50)
 }
 
-object DocumentTest {
+object DocumentApp {
   import UserDomain._
   import DocumentRepository._
 
@@ -83,7 +95,7 @@ object DocumentTest {
     val findUser = UserMemoryDB(users).findOne
     val findFolder = FolderMemoryFS().findOne
 
-    val storeDocument = storeDocumentWithDeps(findUser, findFolder, FileStorage())
+    val store = DocumentInjector(findUser, findFolder, FileStorage())
 
     findUser("1").foreach(_ => println("User found"))
     findUser("2").foreach(_ => println("Error: User found"))
@@ -93,6 +105,6 @@ object DocumentTest {
     findUser("1").foreach(u =>
       println("User 1 can write to folder " + FileStorage().canWrite(u, folder)))
 
-    if (storeDocument("1", "test", "")) println("User able to store document")
+    if (store.storeDocument("1", "test", "")) println("User able to store document")
   }
 }
